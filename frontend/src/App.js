@@ -48,32 +48,47 @@ const App = () => {
   };
 
   const calculatePages = () => {
-    if (!textareaRef.current) return;
-    
-    const textarea = textareaRef.current;
-    const style = window.getComputedStyle(textarea);
-    const lineHeight = parseFloat(style.lineHeight);
-    const paddingTop = parseFloat(style.paddingTop) || 0;
-    const paddingBottom = parseFloat(style.paddingBottom) || 0;
-    
-    const availableHeight = 900 - 96 * 2; // page height minus top/bottom padding
+    const pageTexts = splitTextIntoPages();
+    const totalPages = pageTexts.length;
+    setPages(Array.from({length: totalPages}, (_, i) => i));
+  };
+
+  const splitTextIntoPages = () => {
+    const lineHeight = 16;
+    const availableHeight = 900 - 96 * 2;
     const linesPerPage = Math.floor(availableHeight / lineHeight);
+    const avgCharsPerLine = 75;
     
     const lines = text.split('\n');
-    let totalLines = 0;
+    const pageTexts = [];
+    let currentPageLines = [];
+    let currentPageLineCount = 0;
     
     lines.forEach(line => {
-      if (line === '') {
-        totalLines += 1;
+      const linesForThisLine = line === '' ? 1 : Math.ceil(line.length / avgCharsPerLine) || 1;
+      
+      if (currentPageLineCount + linesForThisLine > linesPerPage && currentPageLines.length > 0) {
+        // Start a new page
+        pageTexts.push(currentPageLines.join('\n'));
+        currentPageLines = [line];
+        currentPageLineCount = linesForThisLine;
       } else {
-        // Estimate wrapped lines based on character width
-        const avgCharsPerLine = 80; // approximate characters per line
-        totalLines += Math.ceil(line.length / avgCharsPerLine) || 1;
+        currentPageLines.push(line);
+        currentPageLineCount += linesForThisLine;
       }
     });
     
-    const totalPages = Math.ceil(totalLines / linesPerPage) || 1;
-    setPages(Array.from({length: totalPages}, (_, i) => i));
+    // Add the last page if there are remaining lines
+    if (currentPageLines.length > 0) {
+      pageTexts.push(currentPageLines.join('\n'));
+    }
+    
+    return pageTexts.length > 0 ? pageTexts : [''];
+  };
+
+  const getTextForPage = (pageIndex) => {
+    const pageTexts = splitTextIntoPages();
+    return pageTexts[pageIndex] || '';
   };
 
   useEffect(() => {
@@ -264,10 +279,6 @@ const App = () => {
           {/* Center - Writing Space */}
           <div className="center-content">
             <div className="editor-container">
-              <div className="editor-header">
-                <h2>Coauthor</h2>
-              </div>
-              
               <div className="purpose-section">
                 <input
                   type="text"
@@ -358,7 +369,7 @@ const App = () => {
                     <div className="page-number">Page {pageIndex + 1}</div>
                     <div className="page-content">
                       <div className="page-overflow-text">
-                        {/* This will be populated when text overflows */}
+                        {getTextForPage(pageIndex)}
                       </div>
                     </div>
                   </div>
