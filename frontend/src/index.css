@@ -239,7 +239,6 @@ body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
   max-height: calc(100vh - 200px);
-  margin-left: 1rem;
 }
 
 .comment-sidebar h3 {

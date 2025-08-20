@@ -252,93 +252,59 @@ const App = () => {
               </div>
               
               <div className="editor-content">
-                <div className="writing-area-with-comments">
-                  <div className="document-container">
-                    {/* Text Editor */}
-                    <div className="text-editor">
-                      {comments.length === 0 ? (
-                        <textarea
-                          ref={textareaRef}
-                          className="main-textarea"
-                          value={text}
-                          onChange={handleTextChange}
-                          placeholder="Start writing your draft here..."
-                        />
-                      ) : (
-                        <div className="document-view">
-                          <div className="document-text">
-                            {processTextWithComments().map((segment, index) => {
-                              if (segment.type === 'normal') {
-                                return (
-                                  <span key={index} className="normal-text">
-                                    {segment.text}
-                                  </span>
-                                );
-                              } else {
-                                return (
-                                  <span
-                                    key={index}
-                                    className={`commented-text commented-${segment.critic} ${
-                                      hoveredComment === segment.commentId ? 'highlighted' : ''
-                                    }`}
-                                    data-comment-id={segment.commentId}
-                                    title={segment.comment}
-                                    onMouseEnter={() => setHoveredComment(segment.commentId)}
-                                    onMouseLeave={() => setHoveredComment(null)}
-                                  >
-                                    {segment.text}
-                                  </span>
-                                );
-                              }
-                            })}
-                          </div>
-                          <button 
-                            className="edit-button"
-                            onClick={() => setComments([])}
-                          >
-                            ✏️ Edit Text
-                          </button>
+                <div className="document-container">
+                  {/* Text Editor */}
+                  <div className="text-editor">
+                    {comments.length === 0 ? (
+                      <textarea
+                        ref={textareaRef}
+                        className="main-textarea"
+                        value={text}
+                        onChange={handleTextChange}
+                        placeholder="Start writing your draft here..."
+                      />
+                    ) : (
+                      <div className="document-view">
+                        <div className="document-text">
+                          {processTextWithComments().map((segment, index) => {
+                            if (segment.type === 'normal') {
+                              return (
+                                <span key={index} className="normal-text">
+                                  {segment.text}
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span
+                                  key={index}
+                                  className={`commented-text commented-${segment.critic} ${
+                                    hoveredComment === segment.commentId ? 'highlighted' : ''
+                                  }`}
+                                  data-comment-id={segment.commentId}
+                                  title={segment.comment}
+                                  onMouseEnter={() => setHoveredComment(segment.commentId)}
+                                  onMouseLeave={() => setHoveredComment(null)}
+                                >
+                                  {segment.text}
+                                </span>
+                              );
+                            }
+                          })}
                         </div>
-                      )}
-                      {suggestion && (
-                        <div className="suggestion-overlay">
-                          {suggestion}
-                        </div>
-                      )}
-                    </div>
+                        <button 
+                          className="edit-button"
+                          onClick={() => setComments([])}
+                        >
+                          ✏️ Edit Text
+                        </button>
+                      </div>
+                    )}
+                    {suggestion && (
+                      <div className="suggestion-overlay">
+                        {suggestion}
+                      </div>
+                    )}
                   </div>
-                  
-                  {/* Comment Sidebar - Moved Outside Document Container */}
-                  {comments.length > 0 && (
-                    <div className="comment-sidebar">
-                      <h3>Comments</h3>
-                      {comments.map((comment, index) => {
-                        const criticInfo = critics.find(c => c.type === comment.critic);
-                        return (
-                          <div 
-                            key={index} 
-                            className={`comment-card ${comment.critic} ${
-                              hoveredComment === index ? 'highlighted' : ''
-                            }`}
-                            data-comment-id={index}
-                            onMouseEnter={() => setHoveredComment(index)}
-                            onMouseLeave={() => setHoveredComment(null)}
-                          >
-                            <div className="comment-header">
-                              <div className="critic-avatar">
-                                {criticInfo.avatar}
-                              </div>
-                              <div className="critic-name">{criticInfo.name}</div>
-                            </div>
-                            <div className="comment-content">
-                              <div className="quoted-text">"{comment.selectedText}"</div>
-                              <div className="comment-text">{comment.comment}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
               </div>
               
@@ -368,12 +334,44 @@ const App = () => {
             </div>
           </div>
 
-          {/* Right Sidebar - Loading States */}
+          {/* Right Sidebar - Comments and Loading States */}
           <div className="right-sidebar">
             {(loading || loadingProgress) && (
               <div className="loading">
                 <div className="loading-spinner"></div>
                 {loading ? 'Getting feedback...' : 'Analyzing progress...'}
+              </div>
+            )}
+            
+            {/* Comments Section */}
+            {comments.length > 0 && (
+              <div className="comment-sidebar">
+                <h3>Comments</h3>
+                {comments.map((comment, index) => {
+                  const criticInfo = critics.find(c => c.type === comment.critic);
+                  return (
+                    <div 
+                      key={index} 
+                      className={`comment-card ${comment.critic} ${
+                        hoveredComment === index ? 'highlighted' : ''
+                      }`}
+                      data-comment-id={index}
+                      onMouseEnter={() => setHoveredComment(index)}
+                      onMouseLeave={() => setHoveredComment(null)}
+                    >
+                      <div className="comment-header">
+                        <div className="critic-avatar">
+                          {criticInfo.avatar}
+                        </div>
+                        <div className="critic-name">{criticInfo.name}</div>
+                      </div>
+                      <div className="comment-content">
+                        <div className="quoted-text">"{comment.selectedText}"</div>
+                        <div className="comment-text">{comment.comment}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
