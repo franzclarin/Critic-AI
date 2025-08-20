@@ -11,8 +11,8 @@ const App = () => {
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(false);
   const [activeTab, setActiveTab] = useState('coauthor');
+  const [hoveredComment, setHoveredComment] = useState(null);
   const textareaRef = useRef(null);
-  const [pages, setPages] = useState([0]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -47,59 +47,6 @@ const App = () => {
     setCursorPosition(e.target.selectionStart);
   };
 
-  const calculatePages = () => {
-    const pageTexts = splitTextIntoPages();
-    const totalPages = pageTexts.length;
-    setPages(Array.from({length: totalPages}, (_, i) => i));
-  };
-
-  const splitTextIntoPages = () => {
-    const lineHeight = 16;
-    const availableHeight = 900 - 96 * 2;
-    const linesPerPage = Math.floor(availableHeight / lineHeight);
-    const avgCharsPerLine = 75;
-    
-    const lines = text.split('\n');
-    const pageTexts = [];
-    let currentPageLines = [];
-    let currentPageLineCount = 0;
-    
-    lines.forEach(line => {
-      const linesForThisLine = line === '' ? 1 : Math.ceil(line.length / avgCharsPerLine) || 1;
-      
-      if (currentPageLineCount + linesForThisLine > linesPerPage && currentPageLines.length > 0) {
-        // Start a new page
-        pageTexts.push(currentPageLines.join('\n'));
-        currentPageLines = [line];
-        currentPageLineCount = linesForThisLine;
-      } else {
-        currentPageLines.push(line);
-        currentPageLineCount += linesForThisLine;
-      }
-    });
-    
-    // Add the last page if there are remaining lines
-    if (currentPageLines.length > 0) {
-      pageTexts.push(currentPageLines.join('\n'));
-    }
-    
-    return pageTexts.length > 0 ? pageTexts : [''];
-  };
-
-  const getTextForPage = (pageIndex) => {
-    const pageTexts = splitTextIntoPages();
-    return pageTexts[pageIndex] || '';
-  };
-
-  useEffect(() => {
-    calculatePages();
-  }, [text]);
-
-  useEffect(() => {
-    const handleResize = () => calculatePages();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   const handleSubmit = async () => {
     if (!text.trim()) {
@@ -171,47 +118,62 @@ const App = () => {
     }
   };
 
-  const getHighlightRanges = () => {
-    return comments.map((comment, index) => ({
-      start: comment.position.start,
-      end: comment.position.end,
-      critic: comment.critic,
-      commentId: index,
-      selectedText: comment.selectedText
-    }));
-  };
-
-  const handleTextareaScroll = () => {
-    // Sync highlight overlay with textarea scroll
-    const textarea = textareaRef.current;
-    const overlay = document.querySelector('.highlight-overlay');
-    if (textarea && overlay) {
-      overlay.scrollTop = textarea.scrollTop;
-      overlay.scrollLeft = textarea.scrollLeft;
+  const processTextWithComments = () => {
+    if (!text || comments.length === 0) {
+      return text;
     }
+
+    // Create segments with comment information
+    const segments = [];
+    let lastIndex = 0;
+    
+    // Sort comments by their position in text
+    const sortedComments = [...comments].sort((a, b) => {
+      const aPos = text.indexOf(a.selectedText?.replace(/^["']|["']$/g, '').trim() || '');
+      const bPos = text.indexOf(b.selectedText?.replace(/^["']|["']$/g, '').trim() || '');
+      return aPos - bPos;
+    });
+    
+    sortedComments.forEach((comment, index) => {
+      const cleanSelected = comment.selectedText?.replace(/^["']|["']$/g, '').trim();
+      if (!cleanSelected) return;
+      
+      const startPos = text.indexOf(cleanSelected, lastIndex);
+      if (startPos === -1) return;
+      
+      const endPos = startPos + cleanSelected.length;
+      
+      // Add text before this comment
+      if (startPos > lastIndex) {
+        segments.push({
+          text: text.substring(lastIndex, startPos),
+          type: 'normal'
+        });
+      }
+      
+      // Add commented text
+      segments.push({
+        text: text.substring(startPos, endPos),
+        type: 'comment',
+        critic: comment.critic,
+        commentId: index,
+        comment: comment.comment
+      });
+      
+      lastIndex = endPos;
+    });
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      segments.push({
+        text: text.substring(lastIndex),
+        type: 'normal'
+      });
+    }
+    
+    return segments;
   };
 
-  const calculateTextPosition = (textIndex) => {
-    if (!textareaRef.current) return { top: 0, left: 0 };
-    
-    const textarea = textareaRef.current;
-    const style = window.getComputedStyle(textarea);
-    const fontSize = parseFloat(style.fontSize);
-    const lineHeight = parseFloat(style.lineHeight) || fontSize * 1.15;
-    
-    const textBeforeIndex = text.substring(0, textIndex);
-    const lines = textBeforeIndex.split('\n');
-    const lineNumber = lines.length - 1;
-    const charInLine = lines[lineNumber].length;
-    
-    // Approximate character width based on font size
-    const charWidth = fontSize * 0.6; // Approximate for Times New Roman
-    
-    return {
-      top: lineNumber * lineHeight,
-      left: charInLine * charWidth
-    };
-  };
 
   const critics = [
     {
@@ -289,73 +251,55 @@ const App = () => {
                 />
               </div>
               
-              <div className="pages-container">
-                <div className="page">
-                  <div className="page-number">Page 1</div>
-                  <div className="page-content">
-                    <div className="editor-wrapper">
-                      {comments.length > 0 && (
-                        <div className="highlight-overlay">
-                          {getHighlightRanges().map((range, index) => {
-                            const startPos = calculateTextPosition(range.start);
-                            const endPos = calculateTextPosition(range.end);
-                            const selectedText = range.selectedText || text.substring(range.start, range.end);
-                            
-                            // Handle multi-line selections by creating multiple highlight rectangles
-                            const textBetween = text.substring(range.start, range.end);
-                            const hasLineBreak = textBetween.includes('\n');
-                            
-                            if (hasLineBreak) {
-                              // For multi-line, create separate highlights per line
-                              const lines = textBetween.split('\n');
-                              return lines.map((line, lineIdx) => {
-                                const lineStart = range.start + textBetween.indexOf(line);
-                                const linePos = calculateTextPosition(lineStart);
+              <div className="editor-content">
+                <div className="writing-area-with-comments">
+                  <div className="document-container">
+                    {/* Text Editor */}
+                    <div className="text-editor">
+                      {comments.length === 0 ? (
+                        <textarea
+                          ref={textareaRef}
+                          className="main-textarea"
+                          value={text}
+                          onChange={handleTextChange}
+                          placeholder="Start writing your draft here..."
+                        />
+                      ) : (
+                        <div className="document-view">
+                          <div className="document-text">
+                            {processTextWithComments().map((segment, index) => {
+                              if (segment.type === 'normal') {
                                 return (
-                                  <div
-                                    key={`${index}-${lineIdx}`}
-                                    className={`text-highlight highlight-${range.critic}`}
-                                    data-comment-id={range.commentId}
-                                    style={{
-                                      position: 'absolute',
-                                      top: `${linePos.top}px`,
-                                      left: `${linePos.left}px`,
-                                      width: `${line.length * 8.4}px`,
-                                      height: '18px',
-                                      pointerEvents: 'none'
-                                    }}
-                                  />
+                                  <span key={index} className="normal-text">
+                                    {segment.text}
+                                  </span>
                                 );
-                              });
-                            } else {
-                              // Single line highlight
-                              return (
-                                <div
-                                  key={index}
-                                  className={`text-highlight highlight-${range.critic}`}
-                                  data-comment-id={range.commentId}
-                                  style={{
-                                    position: 'absolute',
-                                    top: `${startPos.top}px`,
-                                    left: `${startPos.left}px`,
-                                    width: `${selectedText.length * 8.4}px`,
-                                    height: '18px',
-                                    pointerEvents: 'none'
-                                  }}
-                                />
-                              );
-                            }
-                          })}
+                              } else {
+                                return (
+                                  <span
+                                    key={index}
+                                    className={`commented-text commented-${segment.critic} ${
+                                      hoveredComment === segment.commentId ? 'highlighted' : ''
+                                    }`}
+                                    data-comment-id={segment.commentId}
+                                    title={segment.comment}
+                                    onMouseEnter={() => setHoveredComment(segment.commentId)}
+                                    onMouseLeave={() => setHoveredComment(null)}
+                                  >
+                                    {segment.text}
+                                  </span>
+                                );
+                              }
+                            })}
+                          </div>
+                          <button 
+                            className="edit-button"
+                            onClick={() => setComments([])}
+                          >
+                            ✏️ Edit Text
+                          </button>
                         </div>
                       )}
-                      <textarea
-                        ref={textareaRef}
-                        className="page-textarea"
-                        value={text}
-                        onChange={handleTextChange}
-                        onScroll={handleTextareaScroll}
-                        placeholder="Start writing your draft here..."
-                      />
                       {suggestion && (
                         <div className="suggestion-overlay">
                           {suggestion}
@@ -363,17 +307,39 @@ const App = () => {
                       )}
                     </div>
                   </div>
-                </div>
-                {pages.slice(1).map((pageIndex) => (
-                  <div key={pageIndex} className="page additional-page">
-                    <div className="page-number">Page {pageIndex + 1}</div>
-                    <div className="page-content">
-                      <div className="page-overflow-text">
-                        {getTextForPage(pageIndex)}
-                      </div>
+                  
+                  {/* Comment Sidebar - Moved Outside Document Container */}
+                  {comments.length > 0 && (
+                    <div className="comment-sidebar">
+                      <h3>Comments</h3>
+                      {comments.map((comment, index) => {
+                        const criticInfo = critics.find(c => c.type === comment.critic);
+                        return (
+                          <div 
+                            key={index} 
+                            className={`comment-card ${comment.critic} ${
+                              hoveredComment === index ? 'highlighted' : ''
+                            }`}
+                            data-comment-id={index}
+                            onMouseEnter={() => setHoveredComment(index)}
+                            onMouseLeave={() => setHoveredComment(null)}
+                          >
+                            <div className="comment-header">
+                              <div className="critic-avatar">
+                                {criticInfo.avatar}
+                              </div>
+                              <div className="critic-name">{criticInfo.name}</div>
+                            </div>
+                            <div className="comment-content">
+                              <div className="quoted-text">"{comment.selectedText}"</div>
+                              <div className="comment-text">{comment.comment}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-                ))}
+                  )}
+                </div>
               </div>
               
               <div className="action-buttons">
@@ -402,34 +368,12 @@ const App = () => {
             </div>
           </div>
 
-          {/* Right Sidebar - Comment Bubbles */}
+          {/* Right Sidebar - Loading States */}
           <div className="right-sidebar">
             {(loading || loadingProgress) && (
               <div className="loading">
                 <div className="loading-spinner"></div>
                 {loading ? 'Getting feedback...' : 'Analyzing progress...'}
-              </div>
-            )}
-            {comments.length > 0 && (
-              <div className="comment-bubbles">
-                {comments.map((comment, index) => {
-                  const criticInfo = critics.find(c => c.type === comment.critic);
-                  return (
-                    <div key={index} className={`comment-bubble ${comment.critic}`}>
-                      <div className="bubble-pointer"></div>
-                      <div className="comment-header">
-                        <div className="critic-avatar">
-                          {criticInfo.avatar}
-                        </div>
-                        <div className="critic-name">{criticInfo.name}</div>
-                      </div>
-                      <div className="comment-content">
-                        <div className="quoted-text">"{comment.selectedText}"</div>
-                        <div className="comment-text">{comment.comment}</div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             )}
           </div>

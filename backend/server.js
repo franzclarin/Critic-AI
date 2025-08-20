@@ -27,12 +27,23 @@ const generateComments = async (text, criticType, purpose = '', type = 'complete
           role: 'system',
           content: `${critic.prompt}
 
-You must respond with a JSON array of comment objects. Each comment should have:
+You must respond with ONLY a valid JSON array of comment objects. Do not include any other text, explanations, or markdown formatting.
+
+Each comment object must have exactly these fields:
 - "selectedText": exact text from the original that you're commenting on (5-15 words)
-- "comment": your brief comment about that selection (1-2 sentences max)
+- "comment": your brief comment about that selection (1-2 sentences max)  
 - "position": object with "start" and "end" character positions
 
-Provide 2-4 comments maximum. ${contextPrompt} Be concise but maintain your personality.`
+Example format:
+[
+  {
+    "selectedText": "example text",
+    "comment": "Your comment here.",
+    "position": {"start": 0, "end": 12}
+  }
+]
+
+Provide 2-4 comments maximum. ${contextPrompt} Be concise but maintain your personality. Return ONLY the JSON array.`
         },
         {
           role: 'user',
@@ -48,14 +59,43 @@ Provide 2-4 comments maximum. ${contextPrompt} Be concise but maintain your pers
       }
     });
 
-    const content = response.data.choices[0].message.content;
+    let content = response.data.choices[0].message.content.trim();
+    
+    // Clean up common JSON formatting issues
+    if (content.startsWith('```json')) {
+      content = content.replace(/```json\s*/, '').replace(/```\s*$/, '');
+    }
+    if (content.startsWith('```')) {
+      content = content.replace(/```.*?\n/, '').replace(/```\s*$/, '');
+    }
+    
     try {
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      // Ensure we return an array
+      if (Array.isArray(parsed)) {
+        return parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        return [parsed]; // Single object, wrap in array
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (parseError) {
       console.error('Failed to parse comment JSON:', content);
+      console.error('Parse error:', parseError.message);
+      
+      // Try to extract meaningful text, avoiding JSON display
+      let fallbackComment = 'I apologize, but I\'m having trouble providing specific feedback right now. Please try again.';
+      
+      // If content looks like it might contain a meaningful comment, try to extract it
+      if (content && !content.includes('{') && !content.includes('[') && content.length > 10) {
+        fallbackComment = content.length > 100 
+          ? content.substring(0, 100) + '...'
+          : content;
+      }
+      
       return [{
-        selectedText: text.substring(0, 50) + '...',
-        comment: content.substring(0, 100),
+        selectedText: text.substring(0, Math.min(50, text.length)),
+        comment: fallbackComment,
         position: { start: 0, end: Math.min(50, text.length) }
       }];
     }
